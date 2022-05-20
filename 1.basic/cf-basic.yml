@@ -1,0 +1,36 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "/v2/vpc-environment.json"
+Parameters:
+  AvailabilityZones:
+    Description: Availability Zones that will be used to create subnets
+    Type: CommaDelimitedList
+  VPCIpBlock:
+    Description: CIDR for VPC
+    Type: String
+  PublicELBIpBlocks:
+    Description: Comma-delimited list of three CIDR blocks for Public ELB
+    Type: CommaDelimitedList
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsHostnames: 'True'
+      EnableDnsSupport: 'True'
+      CidrBlock:
+        Ref: VPCIpBlock
+  InternetGateway:
+    DependsOn: VPC
+    Type: AWS::EC2::InternetGateway
+  PublicELBSubnet1:
+    DependsOn:
+    - VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: PublicELBIpBlocks
+      AvailabilityZone:
+        Ref: AvailabilityZones

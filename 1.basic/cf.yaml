@@ -1,0 +1,648 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "/v2/vpc-environment.json"
+Parameters:
+  VpcName:
+    Description: Name of VPC for tags
+    Type: String
+  EnvType:
+    Description: Environment Type
+    Type: String
+  AvailabilityZones:
+    Description: Availability Zones that will be used to create subnets
+    Type: CommaDelimitedList
+  VPCIpBlock:
+    Description: CIDR for VPC
+    Type: String
+  PublicELBIpBlocks:
+    Description: Comma-delimited list of three CIDR blocks for Public ELB
+    Type: CommaDelimitedList
+  PrivateELBIpBlocks:
+    Description: Comma-delimited list of three CIDR blocks for Private ELB
+    Type: CommaDelimitedList
+  PrivateAppIpBlocks:
+    Description: Comma-delimited list of three CIDR blocks for Private App
+    Type: CommaDelimitedList
+  PrivateDataIpBlocks:
+    Description: Comma-delimited list of three CIDR blocks for Private Data
+    Type: CommaDelimitedList
+  PrivateServicesIpBlocks:
+    Description: Comma-delimited list of three CIDR blocks for Private Seervices
+    Type: CommaDelimitedList
+  CreateMgmtNetwork:
+    Description: Should the template create a management network?
+    Type: String
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  Region:
+    Description: Region
+    Type: String
+Mappings:
+  AWSRegion2AMI:
+    eu-west-1:
+      AMI: ami-6975eb1e
+    us-east-1:
+      AMI: ami-224dc94a
+Conditions:
+  ManagementNet:
+    Fn::Equals:
+    - Ref: CreateMgmtNetwork
+    - 'true'
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsHostnames: 'True'
+      EnableDnsSupport: 'True'
+      CidrBlock:
+        Ref: VPCIpBlock
+  
+  PublicELBSubnet1:
+    DependsOn:
+    - VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '0'
+        - Ref: PublicELBIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Ref: AvailabilityZones
+
+  PublicELBSubnet2:
+    DependsOn:
+    - VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '1'
+        - Ref: PublicELBIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Ref: AvailabilityZones
+
+  PublicELBSubnet3:
+    DependsOn:
+    - VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '2'
+        - Ref: PublicELBIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Ref: AvailabilityZones
+
+  InternetGateway:
+    DependsOn: VPC
+    Type: AWS::EC2::InternetGateway
+
+  GatewayToInternet:
+    DependsOn:
+    - VPC
+    - InternetGateway
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+  PublicRouteTable:
+    DependsOn:
+    - VPC
+    - GatewayToInternet
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+
+  PublicRoute:
+    DependsOn:
+    - PublicRouteTable
+    - InternetGateway
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+
+  PublicELBSubnet1RouteTableAssociation:
+    DependsOn:
+    - PublicELBSubnet1
+    - PublicRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicELBSubnet1
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  PublicELBSubnet2RouteTableAssociation:
+    DependsOn:
+    - PublicELBSubnet2
+    - PublicRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicELBSubnet2
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  PublicELBSubnet3RouteTableAssociation:
+    DependsOn:
+    - PublicELBSubnet3
+    - PublicRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicELBSubnet3
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  PrivateELBSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '0'
+        - Ref: PrivateELBIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Ref: AvailabilityZones
+
+  PrivateELBSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '1'
+        - Ref: PrivateELBIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Ref: AvailabilityZones
+
+  PrivateELBSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '2'
+        - Ref: PrivateELBIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Ref: AvailabilityZones
+
+  PrivateRouteTable:
+    DependsOn:
+    - VPC
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+
+  PrivateELBSubnet1RouteTableAssociation:
+    DependsOn:
+    - PrivateELBSubnet1
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateELBSubnet1
+      RouteTableId:
+        Ref: PrivateRouteTable
+  
+  PrivateELBSubnet2RouteTableAssociation:
+    DependsOn:
+    - PrivateELBSubnet2
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateELBSubnet2
+      RouteTableId:
+        Ref: PrivateRouteTable
+
+  PrivateELBSubnet3RouteTableAssociation:
+    DependsOn:
+    - PrivateELBSubnet3
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateELBSubnet3
+      RouteTableId:
+        Ref: PrivateRouteTable
+
+  PrivateAppSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '0'
+        - Ref: PrivateAppIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Ref: AvailabilityZones
+
+  PrivateAppSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '1'
+        - Ref: PrivateAppIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Ref: AvailabilityZones
+
+  PrivateAppSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '2'
+        - Ref: PrivateAppIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Ref: AvailabilityZones
+
+  PrivateAppSubnet1RouteTableAssociation:
+    DependsOn:
+    - PrivateAppSubnet1
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateAppSubnet1
+      RouteTableId:
+        Ref: PrivateRouteTable
+  PrivateAppSubnet2RouteTableAssociation:
+    DependsOn:
+    - PrivateAppSubnet2
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateAppSubnet2
+      RouteTableId:
+        Ref: PrivateRouteTable
+  PrivateAppSubnet3RouteTableAssociation:
+    DependsOn:
+    - PrivateAppSubnet3
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateAppSubnet3
+      RouteTableId:
+        Ref: PrivateRouteTable
+  PrivateDataSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '0'
+        - Ref: PrivateDataIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Ref: AvailabilityZones
+
+  PrivateDataSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '1'
+        - Ref: PrivateDataIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Ref: AvailabilityZones
+
+  PrivateDataSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '2'
+        - Ref: PrivateDataIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Ref: AvailabilityZones
+
+  PrivateDataSubnet1RouteTableAssociation:
+    DependsOn:
+    - PrivateDataSubnet1
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateDataSubnet1
+      RouteTableId:
+        Ref: PrivateRouteTable
+  PrivateDataSubnet2RouteTableAssociation:
+    DependsOn:
+    - PrivateDataSubnet2
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateDataSubnet2
+      RouteTableId:
+        Ref: PrivateRouteTable
+  PrivateDataSubnet3RouteTableAssociation:
+    DependsOn:
+    - PrivateDataSubnet3
+    - PrivateRouteTable
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateDataSubnet3
+      RouteTableId:
+        Ref: PrivateRouteTable
+  
+  PrivateServicesSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: ManagementNet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '0'
+        - Ref: PrivateServicesIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Ref: AvailabilityZones
+  
+  PrivateServicesSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: ManagementNet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '1'
+        - Ref: PrivateServicesIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Ref: AvailabilityZones
+
+  PrivateServicesSubnet3:
+    Type: AWS::EC2::Subnet
+    Condition: ManagementNet
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Fn::Select:
+        - '2'
+        - Ref: PrivateServicesIpBlocks
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Ref: AvailabilityZones
+
+  PrivateSericesSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: ManagementNet
+    Properties:
+      SubnetId:
+        Ref: PrivateServicesSubnet1
+      RouteTableId:
+        Ref: PrivateRouteTable
+  PrivateServicesSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: ManagementNet
+    Properties:
+      SubnetId:
+        Ref: PrivateServicesSubnet2
+      RouteTableId:
+        Ref: PrivateRouteTable
+  PrivateServicesSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: ManagementNet
+    Properties:
+      SubnetId:
+        Ref: PrivateServicesSubnet3
+      RouteTableId:
+        Ref: PrivateRouteTable
+  NATIPAddress:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayToInternet
+    Properties:
+      Domain: vpc
+      InstanceId:
+        Ref: NAT
+  NAT:
+    DependsOn:
+    - PublicELBSubnet1
+    - NatSecurityGroup
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType:
+        Ref: NATInstanceType
+      KeyName:
+        Ref: KeyName
+      SourceDestCheck: 'false'
+      SubnetId:
+        Ref: PublicELBSubnet1
+      SecurityGroupIds:
+      - Ref: NatSecurityGroup
+      ImageId:
+        Fn::FindInMap:
+        - AWSRegion2AMI
+        - Ref: AWS::Region
+        - AMI
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - ''
+          - - "#!/bin/bash\n"
+            - yum update -y && yum install -y yum-cron && chkconfig yum-cron on
+  PrivateRoute:
+    DependsOn:
+    - PrivateRouteTable
+    - NAT
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId:
+        Ref: NAT
+  opsNotifySqs:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Join:
+        - ''
+        - - Ref: QueueName
+          - "-"
+          - Ref: VpcName
+          - "-"
+          - Ref: EnvType
+      DelaySeconds: 15
+      MessageRetentionPeriod: 345600
+      VisibilityTimeout: 43200
+Outputs:
+  NATPublicIp:
+    Value:
+      Fn::GetAtt:
+      - NAT
+      - PublicIp
+    Description: Public IP of NAT box
+  InternetGatewayId:
+    Description: Internet gateway Id
+    Value:
+      Ref: InternetGateway
+  VPCId:
+    Description: A VPC ID.
+    Value:
+      Ref: VPC
+  PrivateELBSubnets:
+    Description: Private ELBs subnets
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: PrivateELBSubnet1
+        - ","
+        - Ref: PrivateELBSubnet2
+        - ","
+        - Ref: PrivateELBSubnet3
+  PublicELBSubnets:
+    Description: Public ELB Subnets
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: PublicELBSubnet1
+        - ","
+        - Ref: PublicELBSubnet2
+        - ","
+        - Ref: PublicELBSubnet3
+  PrivateAppSubnets:
+    Description: Private App subnets
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: PrivateAppSubnet1
+        - ","
+        - Ref: PrivateAppSubnet2
+        - ","
+        - Ref: PrivateAppSubnet3
+  PrivateDataSubnets:
+    Description: Private Data Subnets
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: PrivateDataSubnet1
+        - ","
+        - Ref: PrivateDataSubnet2
+        - ","
+        - Ref: PrivateDataSubnet3
+  PrivateServicesSubnets:
+    Description: Private Servicess Subnets
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: PrivateServicesSubnet1
+        - ","
+        - Ref: PrivateServicesSubnet2
+        - ","
+        - Ref: PrivateServicesSubnet3
+    Condition: ManagementNet
+  MonitoringGroup:
+    Description: Monitoring Security Group
+    Value:
+      Ref: MonitoringGroup
+    Condition: ManagementNet
+  VpnGroup:
+    Description: VPN Server Security Group
+    Value:
+      Ref: VpnGroup
+    Condition: ManagementNet
+  CiGroup:
+    Description: CI Builder Security Group
+    Value:
+      Ref: CiGroup
+    Condition: ManagementNet
+  opsNotifySqsName:
+    Description: URL of SQS queue
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: QueueName
+        - "-"
+        - Ref: EnvType
+  opsNotifySqsArn:
+    Description: ARN of SQS queue
+    Value:
+      Fn::GetAtt:
+      - opsNotifySqs
+      - Arn
+
+#########
+      Tags:
+      - Key: Name
+        Value:
+          Fn::Join:
+          - ''
+          - - priv-elb3-
+            - Ref: VpcName
+            - "-"
+            - Ref: EnvType
+      - Key: env
+        Value:
+          Ref: EnvType
+      - Key: role
+        Value: net
+      - Key: Business
+        Value: Foo
+      - Key: Platform
+        Value: Bar
+#########

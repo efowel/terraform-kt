@@ -1,0 +1,22 @@
+#######VARS#######
+variable "cidr_block"   { description = "VPC CIDR" }
+variable "pub_subnet"   { description = "Sunbet Public cidr_block" }
+variable "az"           { description = "Availablity Zones" }
+
+##Creates VPC
+resource "aws_vpc" "main" {
+  cidr_block            = var.cidr_block
+  instance_tenancy      = "default"
+  enable_dns_hostnames  = true
+  enable_dns_support    = true
+}
+##Creates Internet Gateway
+resource "aws_internet_gateway" "vpc_igw" {
+  vpc_id                =  aws_vpc.main.id
+}
+##Creates Public Subnet
+resource "aws_subnet" "public-subnet" {
+  cidr_block          = var.public_cidr_block[count.index]
+  vpc_id              = var.vpc_id
+  availability_zone   = var.az
+}
